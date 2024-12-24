@@ -1,0 +1,161 @@
+- name: Server Installation
+  hosts: server
+  become: yes
+  become_method: sudo
+  tasks:
+
+# ---------------------------------------------------------
+# Preparation Install
+# ---------------------------------------------------------
+
+    - name: Update Repo
+      apt: update_cache=yes 
+    
+    - name: Install Support Service
+      apt: name={{ item }} state=present
+      loop: [ 'python3-pip', 'zip', 'unzip', 'btop' ]
+
+#----------------------------------------------------------
+# Docker Setup
+#----------------------------------------------------------
+
+    - name: Install Support package
+      apt: update_cache=yes name={{ item }} state=latest
+      loop: [ 'ca-certificates', 'curl', 'gnupg' ]
+    
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+    
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu jammy stable
+        state: present
+    
+    - name: Install Docker
+      apt: name={{ item }} state=present
+      loop: [ 'docker-ce', 'docker-ce-cli', 'containerd.io', 'docker-buildx-plugin', 'docker-compose-plugin', 'docker-compose' ]
+
+# # ---------------------------------------------------------
+# # Install MalDet (Malware Detected)
+# # ---------------------------------------------------------
+
+#     - name: Install Support
+#       apt: update_cache=yes name=inotify-tools state=present
+
+#     - name: Download package Maldet
+#       shell: wget -O /tmp/maldetect-current.tar.gz http://www.rfxn.com/downloads/maldetect-current.tar.gz
+
+#     - name: Extract package
+#       shell: tar -zxvf /tmp/maldetect-current.tar.gz -C /tmp/
+
+#     - name: Install Maldet
+#       shell: cd /tmp/maldetect-1.6.5/ && sudo ./install.sh
+
+#     - name: Memberi waktu installasi
+#       pause: seconds=30
+
+#     - name: Config Maldet
+#       shell: sed -i 's/scan_ignore_root="1"/scan_ignore_root="0"/g' /usr/local/maldetect/conf.maldet && sed -i 's/quarantine_hits="0"/quarantine_hits="1"/g' /usr/local/maldetect/conf.maldet
+
+#     - name: Restart Maldet
+#       service: name=maldet state=restarted
+
+#     - name: Create CronJob
+#       shell: echo "00 02  * * 0  root  maldet -a /" >> /etc/crontab && echo "23 00  1 * *  root  maldet -u" >> /etc/crontab
+
+#     - name: Restart CronJob
+#       service: name=cron state=restarted
+
+#     - name: Remove Installation
+#       shell: rm -f /tmp/maldetect-current.tar.gz && rm -Rf /tmp/maldetect-1.6.5
+
+# # ---------------------------------------------------------
+# # Install ClamAV (Antivirus)
+# # ---------------------------------------------------------
+
+#     - name: Install ClamAV
+#       apt: update_cache=yes name=clamav state=present
+
+#     - name: Stop service
+#       service: name=clamav-freshclam state=stopped
+
+    # - name: Update Virus Database
+    #   shell: freshclam
+
+#     - name: Start service
+#       service: name=clamav-freshclam state=started
+
+#     - name: Create Quarantine directory
+#       shell: mkdir -p /tmp/clamav/quarantine
+
+#     - name: Create CronJob
+#       shell: echo "00 01  * * 0  root  clamscan -r --move=/tmp/clamav/quarantine /home" >> /etc/crontab
+
+#     - name: Restart CronJob
+#       service: name=cron state=restarted
+
+# ---------------------------------------------------------
+# Setup Firewall
+# ---------------------------------------------------------
+
+    - name: Allow outgoing
+      ufw: default=allow direction=outgoing
+
+    - name: Allow incoming
+      ufw: default=deny direction=incoming
+
+    - name: Allow Port 22
+      ufw: rule=allow port=22 proto=tcp
+
+    - name: Allow Port 3000 to IP Spesific
+      ufw: rule=allow port=3000 proto=tcp from_ip=192.168.56.1
+
+    - name: Allow Port 80
+      ufw: rule=allow port=80 proto=tcp 
+    
+    - name: Allow Port 443
+      ufw: rule=allow port=443 proto=tcp 
+
+    - name: Enable Firewall
+      ufw: state=enabled
+
+# ---------------------------------------------------------
+# Deploy apps and monitor
+# ---------------------------------------------------------
+    - name: Copy webapps
+      copy:
+        src: ../webapps
+        dest: /var/www/
+    
+    - name: Copy monitor
+      copy:
+        src: ../monitoring
+        dest: /var/www/
+        
+    - name: Create Env secret
+      copy:
+        dest: /var/www/.env
+        content: |
+            DB_PASS={{ dbpass }}
+            GRAF_PASS={{ grappass }}
+      
+    - name: Deploy webapps
+      shell: "sh -c 'sudo docker-compose --env-file /var/www/.env -f /var/www/webapps/docker-compose.yaml up -d'"
+    
+    - name: Deploy monitoring
+      shell: "sh -c 'sudo docker-compose --env-file /var/www/.env -f /var/www/monitoring/docker-compose.yaml up -d'"
+
+# ---------------------------------------------------------
+# Change SSH Port
+# ---------------------------------------------------------
+
+    # - name: Config SSH Port in sshd_config
+    #   lineinfile:
+    #     path: /etc/ssh/sshd_config
+    #     regexp: '^#Port\s+'
+    #     line: 'Port 2222'
+    
+    # - name: restart sshd
+    #   service: name=sshd state=restarted

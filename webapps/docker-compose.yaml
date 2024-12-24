@@ -1,0 +1,38 @@
+services:
+  nginx:
+      image: nginx:alpine
+      container_name: web-proxy
+      volumes:
+        - ./nginx/apps.conf:/etc/nginx/conf.d/default.conf
+      ports:
+        - 80:80
+        - 443:443
+      depends_on:
+        - apps
+      networks:
+        - apps.networks
+
+  apps:
+      build:
+        context: ./www
+        dockerfile: Dockerfile
+      depends_on:
+        - db.apps
+      networks:
+        - apps.networks
+  
+  db.apps:
+      image: mysql:8.0
+      container_name: db.apps
+      environment:
+        MYSQL_ROOT_PASSWORD: ${DB_PASS}
+      volumes:
+        - db.apps:/var/lib/mysql
+      networks:
+        - apps.networks
+
+networks:
+  apps.networks:
+
+volumes:
+  db.apps:

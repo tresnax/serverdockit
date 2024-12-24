@@ -1,0 +1,73 @@
+services:
+  grafana-monitor:
+    image: grafana/grafana
+    container_name: grafana-monitor
+    restart: always
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAF_PASS}  
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_BASIC_ENABLED=true
+    volumes:
+      - ./config/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml
+      - ./config/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml
+      - ./dashboards:/var/lib/grafana/dashboards/
+      - grafana-storage:/var/lib/grafana/
+    ports:
+      - 3000:3000
+    networks:
+      - monitor-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-matric
+    restart: always
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - monitor-net
+
+  # ---------- Exporter -------------
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: always
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitor-net
+
+  docker-exporter:
+    image: gcr.io/cadvisor/cadvisor:v0.47.1
+    container_name: docker-exporter
+    restart: always
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+      - "/dev/disk/:/dev/disk:ro"
+    networks:
+      - monitor-net
+  
+networks:
+  monitor-net:
+    
+volumes:
+  grafana-storage:
+  prometheus-data:
